@@ -1,1 +1,7 @@
 .env
+node_modules/
+dist/
+out/
+build/
+package-lock.json
+yarn.lock
