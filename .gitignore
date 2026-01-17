@@ -5,3 +5,5 @@ out/
 build/
 package-lock.json
 yarn.lock
+.idea/
+__pycache__/

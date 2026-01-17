@@ -1,0 +1,140 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from app.models import (
+    User,
+    CreateReviewRequest,
+    Review,
+    Game,
+    ReviewResponse,
+    Like,
+    Comment,
+)
+from app.core.security import get_current_user
+from app.db.session import get_session
+from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel import select, func
+
+router = APIRouter(prefix="/reviews", tags=["Reviews"])
+
+
+@router.post(
+    "/",
+    response_model=ReviewResponse,
+    description="Create a review for a given game",
+)
+async def create_review(
+    review_request: CreateReviewRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    # Check that the game exists
+    target_game = await session.get(Game, review_request.game_id)
+    if not target_game:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Game for this review not found",
+        )
+
+    # Check that the user doesn't already have a review for the game
+    if any(r.game_id == review_request.game_id for r in current_user.reviews):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You already have a review for this game",
+        )
+
+    # Create a review for this game
+    review = Review(
+        game_id=review_request.game_id,
+        user_id=current_user.id,
+        rating=review_request.rating,
+        review_text=review_request.review_text,
+        playtime=review_request.playtime,
+    )
+    session.add(review)
+    await session.commit()
+    await session.refresh(review)
+
+    # Return enhanced response with counts
+    return ReviewResponse(
+        id=review.id,
+        game_id=review.game_id,
+        user_id=review.user_id,
+        username=current_user.username,
+        rating=review.rating,
+        review_text=review.review_text,
+        playtime=review.playtime,
+        created_at=review.created_at,
+        like_count=0,
+        comment_count=0,
+        user_has_liked=False,
+    )
+
+
+@router.get(
+    "/{review_id}",
+    response_model=ReviewResponse,
+    description="Get a single review with like and comment counts",
+)
+async def get_review(
+    review_id: int,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    # Get the review
+    review = await session.get(Review, review_id)
+
+    if not review:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Review not found",
+        )
+
+    # Get like count
+    like_count = len(review.likes)
+
+    # Get comment count
+    comment_count = len(review.comments)
+
+    # Check if current user has liked this review
+    user_has_liked = any(like.user_id == current_user.id for like in review.likes)
+
+    return ReviewResponse(
+        id=review.id,
+        game_id=review.game_id,
+        user_id=review.user_id,
+        username=review.user.username,
+        rating=review.rating,
+        review_text=review.review_text,
+        playtime=review.playtime,
+        created_at=review.created_at,
+        like_count=like_count,
+        comment_count=comment_count,
+        user_has_liked=user_has_liked,
+    )
+
+
+@router.delete(
+    "/{review_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    description="Delete a review",
+)
+async def delete_review(
+    review_id: int,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    # Check that the review exists
+    target_review = await session.get(Review, review_id)
+    if not target_review:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Review not found",
+        )
+
+    if target_review.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="You are not authorized to perform this action",
+        )
+
+    await session.delete(target_review)
+    await session.commit()
