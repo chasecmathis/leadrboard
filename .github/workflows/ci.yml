@@ -30,8 +30,8 @@ jobs:
 
       - name: Run linting
         working-directory: backend
-        run: ./lint.sh
+        run: sh lint.sh
 
       - name: Run tests
         working-directory: backend
-        run: ./pytest.sh
+        run: sh pytest.sh
