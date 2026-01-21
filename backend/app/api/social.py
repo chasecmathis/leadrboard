@@ -3,6 +3,7 @@ from app.models import User, Follow
 from app.core.security import get_current_user
 from app.db.session import get_session
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel import select
 import app.common_types as types
 
 router = APIRouter(prefix="/social", tags=["Social"])
@@ -25,7 +26,8 @@ async def send_follow_request(
         )
 
     # Check that the targeted user exists
-    target_user = await session.get(User, user_id)
+    result = await session.exec(select(User).where(User.id == user_id))
+    target_user = result.first()
     if not target_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
@@ -70,7 +72,8 @@ async def approve_follow_request(
         )
 
     # Check that the targeted user exists
-    target_user = await session.get(User, user_id)
+    result = await session.exec(select(User).where(User.id == user_id))
+    target_user = result.first()
     if not target_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
@@ -130,7 +133,8 @@ async def reject_follow_request(
         )
 
     # Check that the targeted user exists
-    target_user = await session.get(User, user_id)
+    result = await session.exec(select(User).where(User.id == user_id))
+    target_user = result.first()
     if not target_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"

@@ -1,5 +1,5 @@
 import pytest
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
 from fastapi import status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
@@ -10,21 +10,22 @@ import app.common_types as types
 class TestSocialEndpoints:
     """Test suite for /social endpoints."""
 
-    def test_send_follow_request_without_auth(self, client: TestClient):
+    @pytest.mark.asyncio
+    async def test_send_follow_request_without_auth(self, client: AsyncClient):
         """Test that /social/follow/{user_id} returns 401 without authentication."""
-        response = client.post("/social/follow/0")
+        response = await client.post("/social/follow/0")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert response.json()["detail"] == "Not authenticated"
 
     @pytest.mark.asyncio
     async def test_send_follow_request_to_current_user(
         self,
-        authenticated_client: TestClient,
+        authenticated_client: AsyncClient,
         test_user: User,
         test_session: AsyncSession,
     ):
         """Test that /social/follow/{user_id} returns 400 if it gets sent to the current user."""
-        response = authenticated_client.post(f"/social/follow/{test_user.id}")
+        response = await authenticated_client.post(f"/social/follow/{test_user.id}")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.json()["detail"] == "You cannot follow yourself"
 
@@ -36,12 +37,12 @@ class TestSocialEndpoints:
     @pytest.mark.asyncio
     async def test_send_follow_request_to_missing_user(
         self,
-        authenticated_client: TestClient,
+        authenticated_client: AsyncClient,
         test_user: User,
         test_session: AsyncSession,
     ):
         """Test that /social/follow/{user_id} returns 404 if it gets sent to a missing user."""
-        response = authenticated_client.post(f"/social/follow/{test_user.id + 1}")
+        response = await authenticated_client.post(f"/social/follow/{test_user.id + 1}")
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert response.json()["detail"] == "User not found"
 
@@ -53,7 +54,7 @@ class TestSocialEndpoints:
     @pytest.mark.asyncio
     async def test_send_follow_request_success(
         self,
-        authenticated_client: TestClient,
+        authenticated_client: AsyncClient,
         test_user: User,
         user_factory,
         test_session: AsyncSession,
@@ -63,7 +64,7 @@ class TestSocialEndpoints:
         user2 = await user_factory("user2", "password123")
 
         # Send follow request
-        response = authenticated_client.post(f"/social/follow/{user2.id}")
+        response = await authenticated_client.post(f"/social/follow/{user2.id}")
         assert response.status_code == status.HTTP_200_OK
 
         # Check that a Follow record was created with the correct status
@@ -84,7 +85,7 @@ class TestSocialEndpoints:
     @pytest.mark.asyncio
     async def test_duplicate_follow_request(
         self,
-        authenticated_client: TestClient,
+        authenticated_client: AsyncClient,
         test_user: User,
         user_factory,
         test_session: AsyncSession,
@@ -93,11 +94,11 @@ class TestSocialEndpoints:
         user2 = await user_factory("user2", "password123")
 
         # Send first follow request
-        response1 = authenticated_client.post(f"/social/follow/{user2.id}")
+        response1 = await authenticated_client.post(f"/social/follow/{user2.id}")
         assert response1.status_code == status.HTTP_200_OK
 
         # Send duplicate follow request
-        response2 = authenticated_client.post(f"/social/follow/{user2.id}")
+        response2 = await authenticated_client.post(f"/social/follow/{user2.id}")
         # Should return 400
         assert response2.status_code == status.HTTP_400_BAD_REQUEST
 
@@ -113,7 +114,7 @@ class TestSocialEndpoints:
     @pytest.mark.asyncio
     async def test_approve_follow_request_success(
         self,
-        authenticated_client: TestClient,
+        authenticated_client: AsyncClient,
         test_user: User,
         user_factory,
         follow_request_factory,
@@ -126,7 +127,7 @@ class TestSocialEndpoints:
         await follow_request_factory(user2.id, test_user.id)
 
         # Approve follow request
-        approve_response = authenticated_client.post(
+        approve_response = await authenticated_client.post(
             f"/social/requests/{user2.id}/accept"
         )
         assert approve_response.status_code == status.HTTP_200_OK
@@ -153,7 +154,7 @@ class TestSocialEndpoints:
     @pytest.mark.asyncio
     async def test_approve_follow_request_not_pending(
         self,
-        authenticated_client: TestClient,
+        authenticated_client: AsyncClient,
         test_user: User,
         user_factory,
         follow_request_factory,
@@ -168,7 +169,7 @@ class TestSocialEndpoints:
         )
 
         # Approve follow request
-        approve_response = authenticated_client.post(
+        approve_response = await authenticated_client.post(
             f"/social/requests/{user2.id}/accept"
         )
         assert approve_response.status_code == status.HTTP_400_BAD_REQUEST
@@ -188,7 +189,7 @@ class TestSocialEndpoints:
     @pytest.mark.asyncio
     async def test_send_follow_request_updates_user_relationships(
         self,
-        authenticated_client: TestClient,
+        authenticated_client: AsyncClient,
         test_user: User,
         user_factory,
         test_session: AsyncSession,
@@ -197,7 +198,7 @@ class TestSocialEndpoints:
         user2 = await user_factory("user2", "password123")
 
         # Send follow request
-        response = authenticated_client.post(f"/social/follow/{user2.id}")
+        response = await authenticated_client.post(f"/social/follow/{user2.id}")
         assert response.status_code == status.HTTP_200_OK
 
         # Refresh users to get updated relationships
@@ -218,7 +219,7 @@ class TestSocialEndpoints:
     )
     async def test_reject_follow_request(
         self,
-        authenticated_client: TestClient,
+        authenticated_client: AsyncClient,
         test_user: User,
         user_factory,
         follow_request_factory,
@@ -232,7 +233,7 @@ class TestSocialEndpoints:
         await follow_request_factory(user2.id, test_user.id, follow_status)
 
         # Reject follow request
-        approve_response = authenticated_client.post(
+        approve_response = await authenticated_client.post(
             f"/social/requests/{user2.id}/remove"
         )
         assert approve_response.status_code == status.HTTP_200_OK
@@ -247,7 +248,7 @@ class TestSocialEndpoints:
     @pytest.mark.asyncio
     async def test_reject_follow_request_not_following(
         self,
-        authenticated_client: TestClient,
+        authenticated_client: AsyncClient,
         test_user: User,
         user_factory,
         test_session: AsyncSession,
@@ -256,7 +257,7 @@ class TestSocialEndpoints:
         user2 = await user_factory("user2", "password123")
 
         # Reject follow request
-        approve_response = authenticated_client.post(
+        approve_response = await authenticated_client.post(
             f"/social/requests/{user2.id}/remove"
         )
         assert approve_response.status_code == status.HTTP_400_BAD_REQUEST

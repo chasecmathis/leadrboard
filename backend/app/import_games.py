@@ -6,7 +6,7 @@ import time
 from app.core.config import settings
 from app.models import Game
 from app.db.session import get_session
-from datetime import datetime, timezone
+from datetime import datetime
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from pydantic import HttpUrl

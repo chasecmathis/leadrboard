@@ -114,8 +114,8 @@ class User(SQLModel, table=True):
         },
     )
     reviews: list["Review"] = Relationship(back_populates="user")
-    likes: list["Like"] = Relationship(back_populates="user", cascade_delete=True)
-    comments: list["Comment"] = Relationship(back_populates="user", cascade_delete=True)
+    likes: list["Like"] = Relationship(back_populates="user")
+    comments: list["Comment"] = Relationship(back_populates="user")
 
 
 class Review(SQLModel, table=True):
@@ -149,10 +149,8 @@ class Review(SQLModel, table=True):
     )
     game: "Game" = Relationship(back_populates="reviews")
     user: "User" = Relationship(back_populates="reviews")
-    likes: list["Like"] = Relationship(back_populates="review", cascade_delete=True)
-    comments: list["Comment"] = Relationship(
-        back_populates="review", cascade_delete=True
-    )
+    likes: list["Like"] = Relationship(back_populates="review")
+    comments: list["Comment"] = Relationship(back_populates="review")
 
 
 class Like(SQLModel, table=True):

@@ -1,12 +1,11 @@
 from typing import Sequence
 
 from fastapi import APIRouter, Depends, Query
-from app.models import User, Review, Game, Like, Follow, FeedItemResponse
+from app.models import User, Review, FeedItemResponse
 from app.core.security import get_current_user
 from app.db.session import get_session
-from app.common_types import FollowStatus
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlmodel import select, func, or_
+from sqlmodel import select
 
 router = APIRouter(prefix="/feed", tags=["Feed"])
 
@@ -59,7 +58,7 @@ async def get_feed(
         comment_count = len(review.comments)
 
         # Check if current user has liked this review
-        has_liked = next((current_user.id == u.user_id for u in review.likes), False)
+        # has_liked = next((current_user.id == u.user_id for u in review.likes), False)
 
         feed_items.append(
             FeedItemResponse(

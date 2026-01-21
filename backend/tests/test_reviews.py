@@ -1,14 +1,15 @@
 import pytest
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
 from fastapi import status
-from app.models import User
+from app.models import User, ReviewResponse
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 class TestReviewsEndpoints:
     """Test suite for /reviews endpoints."""
 
-    def test_create_review_without_auth(self, client: TestClient):
+    @pytest.mark.asyncio
+    async def test_create_review_without_auth(self, client: AsyncClient):
         """Test that /reviews/ returns 401 without authentication."""
         json_request = {
             "game_id": 1,
@@ -16,14 +17,14 @@ class TestReviewsEndpoints:
             "review_text": "Cool game",
             "playtime": 120,
         }
-        response = client.post("/reviews", json=json_request)
+        response = await client.post("/reviews", json=json_request)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert response.json()["detail"] == "Not authenticated"
 
     @pytest.mark.asyncio
     async def test_create_review_game_not_found(
         self,
-        authenticated_client: TestClient,
+        authenticated_client: AsyncClient,
     ):
         """Test that /reviews/ returns 404 when game doesn't exist."""
         json_request = {
@@ -32,14 +33,14 @@ class TestReviewsEndpoints:
             "review_text": "Cool game",
             "playtime": 120,
         }
-        response = authenticated_client.post("/reviews", json=json_request)
+        response = await authenticated_client.post("/reviews", json=json_request)
         assert response.status_code == status.HTTP_404_NOT_FOUND
         assert response.json()["detail"] == "Game for this review not found"
 
     @pytest.mark.asyncio
     async def test_create_review_duplicate(
         self,
-        authenticated_client: TestClient,
+        authenticated_client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
         game_factory,
@@ -59,7 +60,7 @@ class TestReviewsEndpoints:
             "review_text": "Cool game",
             "playtime": 120,
         }
-        response = authenticated_client.post("/reviews", json=json_request)
+        response = await authenticated_client.post("/reviews", json=json_request)
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.json()["detail"] == "You already have a review for this game"
 
@@ -70,7 +71,7 @@ class TestReviewsEndpoints:
     @pytest.mark.asyncio
     async def test_create_review_success(
         self,
-        authenticated_client: TestClient,
+        authenticated_client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
         game_factory,
@@ -84,7 +85,7 @@ class TestReviewsEndpoints:
             "review_text": "Cool game",
             "playtime": 120,
         }
-        response = authenticated_client.post("/reviews", json=json_request)
+        response = await authenticated_client.post("/reviews", json=json_request)
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["user_id"] == test_user.id
         assert response.json()["game_id"] == game.id
@@ -96,7 +97,7 @@ class TestReviewsEndpoints:
     @pytest.mark.asyncio
     async def test_create_two_reviews_success(
         self,
-        authenticated_client: TestClient,
+        authenticated_client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
         game_factory,
@@ -113,7 +114,7 @@ class TestReviewsEndpoints:
             "review_text": "Cool game",
             "playtime": 120,
         }
-        response = authenticated_client.post("/reviews", json=json_request)
+        response = await authenticated_client.post("/reviews", json=json_request)
         assert response.status_code == status.HTTP_200_OK
 
         # Make second review
@@ -123,7 +124,7 @@ class TestReviewsEndpoints:
             "review_text": "Cooler game",
             "playtime": 120,
         }
-        response = authenticated_client.post("/reviews", json=json_request)
+        response = await authenticated_client.post("/reviews", json=json_request)
         assert response.status_code == status.HTTP_200_OK
 
         await test_session.refresh(test_user)
@@ -134,7 +135,7 @@ class TestReviewsEndpoints:
     @pytest.mark.asyncio
     async def test_delete_review(
         self,
-        authenticated_client: TestClient,
+        authenticated_client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
         game_factory,
@@ -147,8 +148,32 @@ class TestReviewsEndpoints:
         review = await review_factory(
             game.id, test_user.id, rating=9.6, review_text="Cool game", playtime=120
         )
-        response = authenticated_client.delete(f"/reviews/{review.id}")
+        response = await authenticated_client.delete(f"/reviews/{review.id}")
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
         await test_session.refresh(test_user)
         assert len(test_user.reviews) == 0
+
+    @pytest.mark.asyncio
+    async def test_get_review(
+        self,
+        authenticated_client: AsyncClient,
+        test_session: AsyncSession,
+        test_user: User,
+        game_factory,
+        review_factory,
+    ):
+        """Test that getting a review works."""
+        # Create a test game
+        game = await game_factory("Test Game", "A test game summary", 12345)
+        # Create a test review
+        review = await review_factory(
+            game.id, test_user.id, rating=9.6, review_text="Cool game", playtime=120
+        )
+        response = await authenticated_client.get(f"/reviews/{review.id}")
+        assert response.status_code == status.HTTP_200_OK
+        resp_model = ReviewResponse(**response.json())
+        assert resp_model.id == review.id
+        assert resp_model.user_id == test_user.id
+        assert resp_model.like_count == 0
+        assert resp_model.comment_count == 0

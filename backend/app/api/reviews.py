@@ -5,13 +5,11 @@ from app.models import (
     Review,
     Game,
     ReviewResponse,
-    Like,
-    Comment,
 )
 from app.core.security import get_current_user
 from app.db.session import get_session
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlmodel import select, func
+from sqlmodel import select
 
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
 
@@ -27,7 +25,8 @@ async def create_review(
     session: AsyncSession = Depends(get_session),
 ):
     # Check that the game exists
-    target_game = await session.get(Game, review_request.game_id)
+    result = await session.exec(select(Game).where(Game.id == review_request.game_id))
+    target_game = result.first()
     if not target_game:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -80,8 +79,8 @@ async def get_review(
     session: AsyncSession = Depends(get_session),
 ):
     # Get the review
-    review = await session.get(Review, review_id)
-
+    result = await session.exec(select(Review).where(Review.id == review_id))
+    review = result.first()
     if not review:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -122,8 +121,9 @@ async def delete_review(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    # Check that the review exists
-    target_review = await session.get(Review, review_id)
+    # Get the review
+    result = await session.exec(select(Review).where(Review.id == review_id))
+    target_review = result.first()
     if not target_review:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

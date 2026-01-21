@@ -1,26 +1,30 @@
 import pytest
 import pytest_asyncio
-from typing import AsyncGenerator, Generator, Optional
+from typing import AsyncGenerator, Optional
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
-from fastapi.testclient import TestClient
+from httpx import AsyncClient, ASGITransport
 from fastapi import status
 from app.main import app
 from app.db.session import get_session
-from app.models import User, Follow, Game, Review
+from app.models import User, Follow, Game, Review, Like
 from app.core.security import hash_password
 from app.common_types import FollowStatus
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="session")
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.fixture
 def test_engine():
     """Create an in-memory SQLite database engine for testing."""
     # Use in-memory SQLite database
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
         connect_args={"check_same_thread": False},
-        echo=False,
     )
     return engine
 
@@ -28,10 +32,11 @@ def test_engine():
 @pytest_asyncio.fixture
 async def setup_database(test_engine):
     """Set up the database schema."""
-    async with test_engine.connect() as conn:
+    async with test_engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
-        await conn.commit()
     yield
+    async with test_engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.drop_all)
     await test_engine.dispose()
 
 
@@ -54,9 +59,9 @@ async def test_session(
         yield session
 
 
-@pytest.fixture
-def client(session_maker, setup_database) -> Generator[TestClient, None, None]:
-    """Create a test client that uses the test database."""
+@pytest_asyncio.fixture
+async def client(setup_database, session_maker) -> AsyncGenerator[AsyncClient, None]:
+    """Create an async test client that uses the test database."""
 
     async def override_get_session() -> AsyncGenerator[AsyncSession, None]:
         async with session_maker() as session:
@@ -65,7 +70,9 @@ def client(session_maker, setup_database) -> Generator[TestClient, None, None]:
     # Override the get_session dependency
     app.dependency_overrides[get_session] = override_get_session
 
-    with TestClient(app) as test_client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test", follow_redirects=True
+    ) as test_client:
         yield test_client
 
     # Clear overrides
@@ -73,34 +80,27 @@ def client(session_maker, setup_database) -> Generator[TestClient, None, None]:
 
 
 @pytest_asyncio.fixture
-async def test_user(test_session: AsyncSession) -> User:
+async def test_user(user_factory) -> User:
     """Create a test user in the database."""
-    user = User(
-        username="testuser",
-        hashed_password=hash_password("testpassword123"),
-    )
-    test_session.add(user)
-    await test_session.commit()
-    await test_session.refresh(user)
-    return user
+    return await user_factory(username="test_user", password="password123")
 
 
-@pytest.fixture
-def auth_token(client: TestClient, test_user: User) -> str:
+@pytest_asyncio.fixture
+async def auth_token(client: AsyncClient, test_user: User) -> str:
     """Get an authentication token for the test user."""
-    response = client.post(
+    response = await client.post(
         "/auth/login",
         data={
-            "username": "testuser",
-            "password": "testpassword123",
+            "username": "test_user",
+            "password": "password123",
         },
     )
     assert response.status_code == status.HTTP_200_OK
     return response.json()["access_token"]
 
 
-@pytest.fixture
-def authenticated_client(client: TestClient, auth_token: str) -> TestClient:
+@pytest_asyncio.fixture
+async def authenticated_client(client: AsyncClient, auth_token: str) -> AsyncClient:
     """Create a client with authentication headers."""
     client.headers = {
         **client.headers,
@@ -186,3 +186,20 @@ def review_factory(test_session: AsyncSession):
         return review
 
     return _create_review
+
+
+@pytest.fixture
+def like_factory(test_session: AsyncSession):
+    """Factory to create test likes."""
+
+    async def _create_like(review_id: int, user_id: int):
+        like = Like(
+            review_id=review_id,
+            user_id=user_id,
+        )
+        test_session.add(like)
+        await test_session.commit()
+        await test_session.refresh(like)
+        return like
+
+    return _create_like

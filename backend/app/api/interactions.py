@@ -12,7 +12,7 @@ from app.models import (
 from app.core.security import get_current_user
 from app.db.session import get_session
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlmodel import select, func
+from sqlmodel import select
 from datetime import datetime
 
 router = APIRouter(tags=["Interactions"])
@@ -33,7 +33,8 @@ async def like_review(
     session: AsyncSession = Depends(get_session),
 ):
     # Check that the review exists
-    target_review = await session.get(Review, review_id)
+    result = await session.exec(select(Review).where(Review.id == review_id))
+    target_review = result.first()
     if not target_review:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -41,7 +42,12 @@ async def like_review(
         )
 
     # Check if user already liked this review
-    existing_like = await session.get(Like, (review_id, current_user.id))
+    result = await session.exec(
+        select(Like).where(
+            Like.review_id == review_id and Like.user_id == current_user.id
+        )
+    )
+    existing_like = result.first()
     if existing_like:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -72,7 +78,8 @@ async def unlike_review(
     session: AsyncSession = Depends(get_session),
 ):
     # Check that the review exists
-    target_review = await session.get(Review, review_id)
+    result = await session.exec(select(Review).where(Review.id == review_id))
+    target_review = result.first()
     if not target_review:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -80,10 +87,15 @@ async def unlike_review(
         )
 
     # Check if like exists
-    existing_like = await session.get(Like, (review_id, current_user.id))
+    result = await session.exec(
+        select(Like).where(
+            Like.review_id == review_id and Like.user_id == current_user.id
+        )
+    )
+    existing_like = result.first()
     if not existing_like:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="You have not liked this review",
         )
 
@@ -102,7 +114,8 @@ async def get_review_likes(
     _current_user: User = Depends(get_current_user),
 ):
     # Check that the review exists
-    target_review = await session.get(Review, review_id)
+    result = await session.exec(select(Review).where(Review.id == review_id))
+    target_review = result.first()
     if not target_review:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -138,7 +151,8 @@ async def create_comment(
     session: AsyncSession = Depends(get_session),
 ):
     # Check that the review exists
-    target_review = await session.get(Review, review_id)
+    result = await session.exec(select(Review).where(Review.id == review_id))
+    target_review = result.first()
     if not target_review:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -147,7 +161,10 @@ async def create_comment(
 
     # If parent_comment_id is provided, check that it exists and belongs to the same review
     if comment_request.parent_comment_id:
-        parent_comment = await session.get(Comment, comment_request.parent_comment_id)
+        result = await session.exec(
+            select(Comment).where(Comment.id == comment_request.parent_comment_id)
+        )
+        parent_comment = result.first()
         if not parent_comment:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -193,7 +210,8 @@ async def get_review_comments(
     _current_user: User = Depends(get_current_user),
 ):
     # Check that the review exists
-    target_review = await session.get(Review, review_id)
+    result = await session.exec(select(Review).where(Review.id == review_id))
+    target_review = result.first()
     if not target_review:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -231,7 +249,8 @@ async def update_comment(
     session: AsyncSession = Depends(get_session),
 ):
     # Check that the comment exists
-    target_comment = await session.get(Comment, comment_id)
+    result = await session.exec(select(Comment).where(Comment.id == comment_id))
+    target_comment = result.first()
     if not target_comment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -275,7 +294,8 @@ async def delete_comment(
     session: AsyncSession = Depends(get_session),
 ):
     # Check that the comment exists
-    target_comment = await session.get(Comment, comment_id)
+    result = await session.exec(select(Comment).where(Comment.id == comment_id))
+    target_comment = result.first()
     if not target_comment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

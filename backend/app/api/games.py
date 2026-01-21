@@ -1,5 +1,3 @@
-from http.client import HTTPException
-
 from fastapi import APIRouter, Depends, status, HTTPException
 from app.models import User, Game
 from app.core.security import get_current_user
@@ -19,7 +17,8 @@ async def get_game(
     _current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    game = await session.get(Game, game_id)
+    result = await session.exec(select(Game).where(Game.id == game_id))
+    game = result.first()
     if not game:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Game not found"
