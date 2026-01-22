@@ -119,7 +119,7 @@ class GameImporter:
         """Get or refresh the IGDB token."""
         if not self.token:
             self.token = get_igdb_token(
-                settings.IGDB_CLIENT_ID, settings.IGDB_CLIENT_SECRET
+                settings().IGDB_CLIENT_ID, settings().IGDB_CLIENT_SECRET
             )
         return self.token
 
@@ -130,7 +130,7 @@ class GameImporter:
         try:
             raw_game_data = get_data_from_igdb(
                 self._get_token(),
-                settings.IGDB_CLIENT_ID,
+                settings().IGDB_CLIENT_ID,
                 limit,
                 offset,
                 "where rating_count > 10; sort rating_count desc;",
@@ -141,7 +141,7 @@ class GameImporter:
                 self.token = ""
                 raw_game_data = get_data_from_igdb(
                     self._get_token(),
-                    settings.IGDB_CLIENT_ID,
+                    settings().IGDB_CLIENT_ID,
                     limit,
                     offset,
                     "where rating_count > 10; sort rating_count desc;",

@@ -54,6 +54,6 @@ async def login(
 
     access_token = create_access_token(
         data={"sub": user.username},
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        expires_delta=timedelta(minutes=settings().ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     return AuthResponse(access_token=access_token)
