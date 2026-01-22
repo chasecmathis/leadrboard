@@ -13,18 +13,19 @@ from app.core.security import hash_password
 from app.common_types import FollowStatus
 
 
-class DummySettings():
-    DATABASE_URL: str = 'hereismydatabase'
-    SECRET_KEY: str = 'secretkey123'
+class DummySettings:
+    DATABASE_URL: str = "hereismydatabase"
+    SECRET_KEY: str = "secretkey123"
     ALGORITHM: str = "HS256"
     IGDB_CLIENT_ID: str = "igdb-client-id"
     IGDB_CLIENT_SECRET: str = "igdb-client-secret"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
+
 @pytest.fixture(scope="function", autouse=True)
 def settings(monkeypatch):
     """Set up the test settings."""
-    monkeypatch.setattr( "app.core.config.Settings", DummySettings)
+    monkeypatch.setattr("app.core.config.Settings", DummySettings)
 
 
 @pytest.fixture(scope="session")
