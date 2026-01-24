@@ -34,8 +34,6 @@ app.include_router(review_router)
 app.include_router(interactions_router)
 app.include_router(feed_router)
 
-print(f"Ruff should be mad at this!")
-
 
 # Global Health Check
 @app.get("/health", tags=["System"])
