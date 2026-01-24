@@ -33,13 +33,12 @@ async def get_feed(
     if not followed_users:
         return []
 
-    user_ids_to_fetch = set(user.id for user in followed_users)
+    user_ids_to_fetch = set(user.followed_id for user in followed_users)
 
     # Query reviews from followed users (and optionally current user)
-    # Join with Game and User to get all necessary info
     reviews_statement = (
         select(Review)
-        .where(Review.user_id in user_ids_to_fetch)
+        .where(Review.user_id.in_(user_ids_to_fetch))
         .order_by(Review.created_at.desc())
         .offset(skip)
         .limit(limit)
@@ -58,7 +57,7 @@ async def get_feed(
         comment_count = len(review.comments)
 
         # Check if current user has liked this review
-        # has_liked = next((current_user.id == u.user_id for u in review.likes), False)
+        has_liked = current_user.id in [r.user_id for r in review.likes]
 
         feed_items.append(
             FeedItemResponse(
@@ -74,7 +73,7 @@ async def get_feed(
                 created_at=review.created_at,
                 like_count=like_count,
                 comment_count=comment_count,
-                user_has_liked=review.user_has_liked,
+                user_has_liked=has_liked,
             )
         )
 
