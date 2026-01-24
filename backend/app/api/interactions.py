@@ -221,7 +221,7 @@ async def get_review_comments(
     comments = []
 
     for comment in target_review.comments:
-        comments.add(
+        comments.append(
             CommentResponse(
                 id=comment.id,
                 review_id=comment.review_id,

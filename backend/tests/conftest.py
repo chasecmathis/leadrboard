@@ -8,7 +8,7 @@ from httpx import AsyncClient, ASGITransport
 from fastapi import status
 from app.main import app
 from app.db.session import get_session
-from app.models import User, Follow, Game, Review, Like
+from app.models import User, Follow, Game, Review, Like, Comment
 from app.core.security import hash_password
 from app.common_types import FollowStatus
 
@@ -218,3 +218,24 @@ def like_factory(test_session: AsyncSession):
         return like
 
     return _create_like
+
+
+@pytest.fixture
+def comment_factory(test_session: AsyncSession):
+    """Factory to create test comments."""
+
+    async def _create_comment(
+        review_id: int, user_id: int, text: str, parent_comment_id: int
+    ) -> Comment:
+        comment = Comment(
+            review_id=review_id,
+            user_id=user_id,
+            text=text,
+            parent_comment_id=parent_comment_id,
+        )
+        test_session.add(comment)
+        await test_session.commit()
+        await test_session.refresh(comment)
+        return comment
+
+    return _create_comment
