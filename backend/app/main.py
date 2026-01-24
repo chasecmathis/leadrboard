@@ -26,7 +26,6 @@ app = FastAPI(
 )
 
 # Include Modular Routers
-# This keeps main.py from becoming a 1,000-line file
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(social_router)
