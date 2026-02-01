@@ -37,13 +37,16 @@ def Relationship(
 
 # SQL Models
 
+
 class GameGenreLink(SQLModel, table=True):
     game_id: int = Field(foreign_key="game.id", primary_key=True)
     genre_id: int = Field(foreign_key="genre.id", primary_key=True)
 
+
 class GamePlatformLink(SQLModel, table=True):
     game_id: int = Field(foreign_key="game.id", primary_key=True)
     platform_id: int = Field(foreign_key="platform.id", primary_key=True)
+
 
 class Follow(SQLModel, table=True):
     followed_id: int = Field(
@@ -131,7 +134,7 @@ class Review(SQLModel, table=True):
         title="Game ID",
         description="The ID of the game",
         foreign_key="game.id",
-        ondelete="SET NULL"
+        ondelete="SET NULL",
     )
     user_id: int = Field(
         title="User ID",
@@ -262,19 +265,28 @@ class Game(SQLModel, table=True):
         unique=True,
     )
     reviews: list["Review"] = Relationship(back_populates="game")
-    genres: list["Genre"] = Relationship(back_populates="games", link_model=GameGenreLink)
-    platforms: list["Platform"] = Relationship(back_populates="games", link_model=GamePlatformLink)
+    genres: list["Genre"] = Relationship(
+        back_populates="games", link_model=GameGenreLink
+    )
+    platforms: list["Platform"] = Relationship(
+        back_populates="games", link_model=GamePlatformLink
+    )
+
 
 class Genre(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True) # IGDB ID
+    id: Optional[int] = Field(default=None, primary_key=True)  # IGDB ID
     name: str = Field(index=True, unique=True)
-    games: list["Game"] = Relationship(back_populates="genres", link_model=GameGenreLink)
+    games: list["Game"] = Relationship(
+        back_populates="genres", link_model=GameGenreLink
+    )
+
 
 class Platform(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True) # IGDB ID
+    id: Optional[int] = Field(default=None, primary_key=True)  # IGDB ID
     name: str = Field(index=True, unique=True)
-    games: list["Game"] = Relationship(back_populates="platforms", link_model=GamePlatformLink)
-
+    games: list["Game"] = Relationship(
+        back_populates="platforms", link_model=GamePlatformLink
+    )
 
 
 # Request/Response Models

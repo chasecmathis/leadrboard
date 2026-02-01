@@ -3,6 +3,7 @@ from httpx import AsyncClient
 from fastapi import status
 from app.models import User, Game
 
+
 class TestGamesEndpoints:
     """Test suite for /games endpoints."""
 
@@ -216,12 +217,11 @@ class TestGamesEndpoints:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.json()["detail"] == "Invalid parameters"
 
-
     @pytest.mark.asyncio
     async def test_discover_personalized_cold_start(
-            self,
-            authenticated_client: AsyncClient,
-            game_factory,
+        self,
+        authenticated_client: AsyncClient,
+        game_factory,
     ):
         """
         Test that a new user (with no reviews) gets the fallback list
@@ -245,12 +245,12 @@ class TestGamesEndpoints:
 
     @pytest.mark.asyncio
     async def test_discover_personalized_with_history(
-            self,
-            authenticated_client: AsyncClient,
-            test_user: User,
-            game_factory,
-            review_factory,
-            user_factory,
+        self,
+        authenticated_client: AsyncClient,
+        test_user: User,
+        game_factory,
+        review_factory,
+        user_factory,
     ):
         """
         Test that if User A is similar to User B, User A gets recommended
@@ -259,7 +259,9 @@ class TestGamesEndpoints:
         # Setup Games
         game_rpg = await game_factory("Skyrim", "RPG", 200)
         game_fps = await game_factory("Doom", "FPS", 201)
-        game_target: Game = await game_factory("Witcher", "RPG", 202)  # User B likes this, User A hasn't seen it
+        game_target: Game = await game_factory(
+            "Witcher", "RPG", 202
+        )  # User B likes this, User A hasn't seen it
 
         # Setup "Neighbor" User (User B)
         user_b = await user_factory("rpg_lover", "password123")

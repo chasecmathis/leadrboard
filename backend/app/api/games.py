@@ -55,6 +55,7 @@ async def get_games(
     games = result.all()
     return games
 
+
 @router.get("/discover/personalized", response_model=list[Game])
 async def get_personalized_games(
     limit: int = 10,
@@ -62,10 +63,14 @@ async def get_personalized_games(
     current_user: User = Depends(get_current_user),
 ):
     if limit < 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid parameters")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid parameters"
+        )
 
     recommender = GameRecommendation(session)
-    game_ids = await recommender.generate_recommendations(target_user_id=current_user.id, num_recommendations=limit)
+    game_ids = await recommender.generate_recommendations(
+        target_user_id=current_user.id, num_recommendations=limit
+    )
 
     if not game_ids:
         fallback_statement = select(Game).limit(limit)
@@ -77,4 +82,3 @@ async def get_personalized_games(
     games = result.all()
 
     return games
-

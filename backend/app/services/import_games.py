@@ -20,11 +20,14 @@ class GameImporter:
     async def _get_token(self):
         if not self.token:
             print("🔑 Fetching new IGDB Access Token...")
-            resp = await self.auth_client.post("/token", params={
-                "client_id": settings().IGDB_CLIENT_ID,
-                "client_secret": settings().IGDB_CLIENT_SECRET,
-                "grant_type": "client_credentials",
-            })
+            resp = await self.auth_client.post(
+                "/token",
+                params={
+                    "client_id": settings().IGDB_CLIENT_ID,
+                    "client_secret": settings().IGDB_CLIENT_SECRET,
+                    "grant_type": "client_credentials",
+                },
+            )
             resp.raise_for_status()
             self.token = resp.json()["access_token"]
         return self.token
@@ -48,8 +51,11 @@ class GameImporter:
         return response.json()
 
     @staticmethod
-    async def bulk_upsert_metadata(session: AsyncSession, model_class, items: List[dict]):
-        if not items: return {}
+    async def bulk_upsert_metadata(
+        session: AsyncSession, model_class, items: List[dict]
+    ):
+        if not items:
+            return {}
 
         ids = [i["id"] for i in items]
         stmt = select(model_class).where(model_class.id.in_(ids))
@@ -74,11 +80,17 @@ class GameImporter:
         all_platforms = {}
         print(raw_games)
         for g in raw_games:
-            for gen in g.get("genres", []): all_genres[gen["id"]] = gen
-            for plat in g.get("platforms", []): all_platforms[plat["id"]] = plat
+            for gen in g.get("genres", []):
+                all_genres[gen["id"]] = gen
+            for plat in g.get("platforms", []):
+                all_platforms[plat["id"]] = plat
 
-        genre_map = await self.bulk_upsert_metadata(session, Genre, list(all_genres.values()))
-        platform_map = await self.bulk_upsert_metadata(session, Platform, list(all_platforms.values()))
+        genre_map = await self.bulk_upsert_metadata(
+            session, Genre, list(all_genres.values())
+        )
+        platform_map = await self.bulk_upsert_metadata(
+            session, Platform, list(all_platforms.values())
+        )
 
         # Bulk fetch existing games
         igdb_ids = [g["id"] for g in raw_games]
@@ -97,23 +109,34 @@ class GameImporter:
                 "title": data["name"],
                 "summary": data.get("summary"),
                 "cover_image": cover_url,
-                "release_date": datetime.fromtimestamp(
-                    data["first_release_date"]) if "first_release_date" in data else None,
-                "igdb_id": data["id"]
+                "release_date": (
+                    datetime.fromtimestamp(data["first_release_date"])
+                    if "first_release_date" in data
+                    else None
+                ),
+                "igdb_id": data["id"],
             }
 
             if data["id"] in existing_games:
                 game_obj = existing_games[data["id"]]
-                for key, val in game_fields.items(): setattr(game_obj, key, val)
+                for key, val in game_fields.items():
+                    setattr(game_obj, key, val)
             else:
                 game_obj = Game(**game_fields)
                 session.add(game_obj)
                 new_count += 1
 
             # Update M2M Relationships
-            game_obj.genres = [genre_map[gen["id"]] for gen in data.get("genres", []) if gen["id"] in genre_map]
-            game_obj.platforms = [platform_map[plat["id"]] for plat in data.get("platforms", []) if
-                                  plat["id"] in platform_map]
+            game_obj.genres = [
+                genre_map[gen["id"]]
+                for gen in data.get("genres", [])
+                if gen["id"] in genre_map
+            ]
+            game_obj.platforms = [
+                platform_map[plat["id"]]
+                for plat in data.get("platforms", [])
+                if plat["id"] in platform_map
+            ]
 
         await session.commit()
         return new_count
@@ -126,7 +149,11 @@ class GameImporter:
         # Use a direct AsyncSession context manager for standalone scripts
         async with AsyncSession(get_async_engine()) as session:
             while True:
-                limit = batch_size if total is None else min(batch_size, total - imported_so_far)
+                limit = (
+                    batch_size
+                    if total is None
+                    else min(batch_size, total - imported_so_far)
+                )
                 if limit <= 0:
                     break
 
@@ -148,7 +175,9 @@ class GameImporter:
                 new_games_count = await self.process_batch(session, batch)
                 imported_so_far += len(batch)
 
-                print(f"✅ Processed {len(batch)} games ({new_games_count} were new). Total: {imported_so_far}")
+                print(
+                    f"✅ Processed {len(batch)} games ({new_games_count} were new). Total: {imported_so_far}"
+                )
 
                 if total and imported_so_far >= total:
                     break
@@ -161,8 +190,12 @@ class GameImporter:
 
 async def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--all", action="store_true", help="Pull every single game from IGDB")
-    parser.add_argument("--count", type=int, default=1000, help="Number of games to pull if not --all")
+    parser.add_argument(
+        "--all", action="store_true", help="Pull every single game from IGDB"
+    )
+    parser.add_argument(
+        "--count", type=int, default=1000, help="Number of games to pull if not --all"
+    )
     args = parser.parse_args()
 
     importer = GameImporter()
