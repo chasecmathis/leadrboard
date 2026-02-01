@@ -4,6 +4,6 @@ Generic single-database configuration with an async dbapi.
 
 Moving forward, every time you change a model (e.g., adding a username field to the User class):
 * Modify your model in app/models.py.
-* Generate a script: uv run alembic revision --autogenerate -m "add username".
+* Generate a script: uv run alembic revision --autogenerate -m "add username"
 * Review the script in migrations/versions/.
-* Apply to DB: uv run alembic upgrade head.
+* Apply to DB: uv run alembic upgrade head

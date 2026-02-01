@@ -1,6 +1,7 @@
 import pytest
 from httpx import AsyncClient
 from fastapi import status
+from app.models import User, Game
 
 
 class TestGamesEndpoints:
@@ -215,3 +216,79 @@ class TestGamesEndpoints:
         response = await authenticated_client.get("/games?limit=-1")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.json()["detail"] == "Invalid parameters"
+
+    @pytest.mark.asyncio
+    async def test_discover_personalized_cold_start(
+        self,
+        authenticated_client: AsyncClient,
+        game_factory,
+    ):
+        """
+        Test that a new user (with no reviews) gets the fallback list
+        (standard list of games).
+        """
+        # Create some games so the fallback has something to return
+        g1 = await game_factory("Fallout", "RPG", 100)
+        g2 = await game_factory("Halo", "FPS", 101)
+
+        # User has 0 reviews
+        response = await authenticated_client.get("/games/discover/personalized")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        # Should return existing games
+        assert len(data) == 2
+        titles = [d["title"] for d in data]
+        assert g1.title in titles
+        assert g2.title in titles
+
+    @pytest.mark.asyncio
+    async def test_discover_personalized_with_history(
+        self,
+        authenticated_client: AsyncClient,
+        test_user: User,
+        game_factory,
+        review_factory,
+        user_factory,
+    ):
+        """
+        Test that if User A is similar to User B, User A gets recommended
+        games that User B liked.
+        """
+        # Setup Games
+        game_rpg = await game_factory("Skyrim", "RPG", 200)
+        game_fps = await game_factory("Doom", "FPS", 201)
+        game_target: Game = await game_factory(
+            "Witcher", "RPG", 202
+        )  # User B likes this, User A hasn't seen it
+
+        # Setup "Neighbor" User (User B)
+        user_b = await user_factory("rpg_lover", "password123")
+
+        # Both Current User (A) and User B like Skyrim (High Rating)
+        # This makes them "Neighbors" in the vector space
+        await review_factory(game_rpg.id, test_user.id, 10.0, "RPG", 360)
+        await review_factory(game_rpg.id, user_b.id, 10.0, "RPG 2", 420)
+
+        # User B also loves Witcher, but User A hasn't played it yet.
+        # The engine should now recommend Witcher to User A.
+        await review_factory(game_target.id, user_b.id, 9.0, "Henry Cavill?", 120)
+
+        # 5. Run Request
+        response = await authenticated_client.get("/games/discover/personalized")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+
+        # The recommendation engine should prioritize "Witcher"
+        recommended_titles = [d["title"] for d in data]
+
+        # Verify we got recommendations
+        assert len(data) > 0
+        # Ideally, Witcher is in the list
+        assert game_target.title in recommended_titles
+        # Ideally, Skyrim is NOT in the list (because User A already played it)
+        assert game_rpg.title not in recommended_titles
+        # Ideally, Doom is not in the list (because User B hasn't played it)
+        assert game_fps.title not in recommended_titles
