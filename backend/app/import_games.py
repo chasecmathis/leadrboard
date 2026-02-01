@@ -1,226 +1,178 @@
 import asyncio
 import argparse
-from fastapi import status, HTTPException
-import requests
-import time
-from app.core.config import settings
-from app.models import Game
-from app.db.session import get_session
+import httpx
 from datetime import datetime
+from typing import List, Optional
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from pydantic import HttpUrl
 
-igdb_auth_url = "https://id.twitch.tv"
-igdb_api_url = "https://api.igdb.com"
-
-
-def get_igdb_token(client_id: str, client_secret: str) -> str:
-    """Get an OAuth token from IGDB."""
-    query_params = {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "grant_type": "client_credentials",
-    }
-    response = requests.post(f"{igdb_auth_url}/oauth2/token", params=query_params)
-    if response.status_code != status.HTTP_200_OK:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get IGDB token.",
-        )
-    return response.json()["access_token"]
-
-
-def get_data_from_igdb(
-    bearer_token: str, client_id: str, limit: int, offset: int, filters: str = ""
-) -> list[dict]:
-    """Fetch game data from IGDB API."""
-    headers = {"Authorization": f"Bearer {bearer_token}", "Client-ID": client_id}
-    body = (
-        f"fields name, summary, cover.url, first_release_date, genres.name, platforms.name, "
-        f"involved_companies.company.name, id; limit {limit}; offset {offset}; {filters};"
-    )
-    response = requests.post(f"{igdb_api_url}/v4/games", headers=headers, data=body)
-
-    if response.status_code == status.HTTP_401_UNAUTHORIZED:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized to reach IGDB game data.",
-        )
-    elif response.status_code != status.HTTP_200_OK:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to reach IGDB game data.",
-        )
-
-    return response.json()
-
-
-def process_game_data(games: list[dict]) -> list[Game]:
-    """Convert raw IGDB data to Game models."""
-    game_models = []
-    for game in games:
-        # Build cover image URL
-        cover_image = None
-        if game.get("cover") and game["cover"].get("url"):
-            cover_url = game["cover"]["url"].replace("t_thumb", "t_cover_big")
-            cover_image = HttpUrl(url=f"https:{cover_url}")
-
-        # Build game model
-        game_models.append(
-            Game(
-                title=game["name"],
-                summary=game.get("summary"),
-                cover_image=cover_image,
-                release_date=(
-                    datetime.fromtimestamp(game["first_release_date"])
-                    if game.get("first_release_date")
-                    else None
-                ),
-                igdb_id=game["id"],
-            )
-        )
-    return game_models
-
-
-async def upsert_games(session: AsyncSession, games: list[Game]) -> int:
-    """Insert or update games in the database."""
-    inserted_count = 0
-
-    for game in games:
-        # Check if game already exists by igdb_id
-        stmt = select(Game).where(Game.igdb_id == game.igdb_id)
-        result = await session.exec(stmt)
-        existing_game = result.one_or_none()
-
-        if existing_game:
-            # Update existing game
-            existing_game.title = game.title
-            existing_game.summary = game.summary
-            existing_game.cover_image = game.cover_image
-            existing_game.release_date = game.release_date
-            session.add(existing_game)
-        else:
-            # Insert new game
-            session.add(game)
-            inserted_count += 1
-
-    await session.commit()
-    return inserted_count
+from app.core.config import settings
+from app.db.session import get_async_engine  # Import the engine directly
+from app.models import Game, Genre, Platform
 
 
 class GameImporter:
-    """Handles bulk import of games from IGDB."""
-
     def __init__(self):
-        self.token: str = ""
+        self.client = httpx.AsyncClient(base_url="https://api.igdb.com/v4")
+        self.auth_client = httpx.AsyncClient(base_url="https://id.twitch.tv/oauth2")
+        self.token: Optional[str] = None
 
-    def _get_token(self) -> str:
-        """Get or refresh the IGDB token."""
+    async def _get_token(self):
         if not self.token:
-            self.token = get_igdb_token(
-                settings().IGDB_CLIENT_ID, settings().IGDB_CLIENT_SECRET
-            )
+            print("🔑 Fetching new IGDB Access Token...")
+            resp = await self.auth_client.post("/token", params={
+                "client_id": settings().IGDB_CLIENT_ID,
+                "client_secret": settings().IGDB_CLIENT_SECRET,
+                "grant_type": "client_credentials",
+            })
+            resp.raise_for_status()
+            self.token = resp.json()["access_token"]
         return self.token
 
-    async def fetch_and_store_games(
-        self, session: AsyncSession, limit: int, offset: int
-    ) -> int:
-        """Fetch games from IGDB and store them in the database."""
-        try:
-            raw_game_data = get_data_from_igdb(
-                self._get_token(),
-                settings().IGDB_CLIENT_ID,
-                limit,
-                offset,
-                "where rating_count > 10; sort rating_count desc;",
-            )
-        except HTTPException as exc:
-            if exc.status_code == status.HTTP_401_UNAUTHORIZED:
-                # Token expired, get a new one and retry
-                self.token = ""
-                raw_game_data = get_data_from_igdb(
-                    self._get_token(),
-                    settings().IGDB_CLIENT_ID,
-                    limit,
-                    offset,
-                    "where rating_count > 10; sort rating_count desc;",
-                )
+    async def fetch_igdb_data(self, query) -> List[dict]:
+        token = await self._get_token()
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Client-ID": settings().IGDB_CLIENT_ID,
+        }
+
+        response = await self.client.post("/games", headers=headers, data=query)
+
+        if response.status_code == 401:
+            self.token = None
+            return await self.fetch_igdb_data(query)
+
+        if response.status_code != 200:
+            print(f"❌ IGDB Error {response.status_code}: {response.text}")
+            response.raise_for_status()
+        return response.json()
+
+    @staticmethod
+    async def bulk_upsert_metadata(session: AsyncSession, model_class, items: List[dict]):
+        if not items: return {}
+
+        ids = [i["id"] for i in items]
+        stmt = select(model_class).where(model_class.id.in_(ids))
+        result = await session.exec(stmt)
+        existing = {obj.id: obj for obj in result.all()}
+
+        added_count = 0
+        for item in items:
+            if item["id"] not in existing:
+                new_obj = model_class(id=item["id"], name=item["name"])
+                session.add(new_obj)
+                existing[item["id"]] = new_obj
+                added_count += 1
+
+        if added_count > 0:
+            await session.flush()  # Send to DB but don't commit yet
+        return existing
+
+    async def process_batch(self, session: AsyncSession, raw_games: List[dict]) -> int:
+        # Extract and Upsert Genres/Platforms
+        all_genres = {}
+        all_platforms = {}
+        print(raw_games)
+        for g in raw_games:
+            for gen in g.get("genres", []): all_genres[gen["id"]] = gen
+            for plat in g.get("platforms", []): all_platforms[plat["id"]] = plat
+
+        genre_map = await self.bulk_upsert_metadata(session, Genre, list(all_genres.values()))
+        platform_map = await self.bulk_upsert_metadata(session, Platform, list(all_platforms.values()))
+
+        # Bulk fetch existing games
+        igdb_ids = [g["id"] for g in raw_games]
+        stmt = select(Game).where(Game.igdb_id.in_(igdb_ids))
+        result = await session.exec(stmt)
+        existing_games = {g.igdb_id: g for g in result.all()}
+
+        new_count = 0
+        for data in raw_games:
+            cover_url = None
+            if "cover" in data and "url" in data["cover"]:
+                url = data["cover"]["url"].replace("t_thumb", "t_cover_big")
+                cover_url = f"https:{url}"
+
+            game_fields = {
+                "title": data["name"],
+                "summary": data.get("summary"),
+                "cover_image": cover_url,
+                "release_date": datetime.fromtimestamp(
+                    data["first_release_date"]) if "first_release_date" in data else None,
+                "igdb_id": data["id"]
+            }
+
+            if data["id"] in existing_games:
+                game_obj = existing_games[data["id"]]
+                for key, val in game_fields.items(): setattr(game_obj, key, val)
             else:
-                raise exc
+                game_obj = Game(**game_fields)
+                session.add(game_obj)
+                new_count += 1
 
-        # Process and upsert games
-        game_models = process_game_data(raw_game_data)
-        inserted_count = await upsert_games(session, game_models)
+            # Update M2M Relationships
+            game_obj.genres = [genre_map[gen["id"]] for gen in data.get("genres", []) if gen["id"] in genre_map]
+            game_obj.platforms = [platform_map[plat["id"]] for plat in data.get("platforms", []) if
+                                  plat["id"] in platform_map]
 
-        return inserted_count
+        await session.commit()
+        return new_count
 
-    async def bulk_import(self, total_games: int, batch_size: int):
-        """Import games in batches."""
-        offset = 0
-        total_inserted = 0
+    async def run_import(self, total: Optional[int] = None, batch_size: int = 100):
+        imported_so_far = 0
 
-        print(f"Starting bulk import of {total_games} games...")
+        print(f"🚀 Starting Import (Target: {'All' if total is None else total})")
 
-        # Get a proper database session using async for
-        async for session in get_session():
-            while offset < total_games:
-                current_batch_size = min(batch_size, total_games - offset)
+        # Use a direct AsyncSession context manager for standalone scripts
+        async with AsyncSession(get_async_engine()) as session:
+            while True:
+                limit = batch_size if total is None else min(batch_size, total - imported_so_far)
+                if limit <= 0:
+                    break
 
-                print(
-                    f"Fetching games {offset + 1} to {offset + current_batch_size}..."
+                # Query formatting is critical for IGDB
+                query = (
+                    f"fields name, summary, cover.url, first_release_date, genres.name, platforms.name, id; "
+                    f"limit {limit}; "
+                    f"offset {imported_so_far}; "
+                    f"sort rating_count desc;"
                 )
 
-                inserted = await self.fetch_and_store_games(
-                    session, current_batch_size, offset
-                )
+                print(f"📡 Fetching batch after {imported_so_far} games...")
+                batch = await self.fetch_igdb_data(query)
 
-                total_inserted += inserted
-                print(f"  → Inserted {inserted} new games ({total_inserted} total)")
+                if not batch:
+                    print("Empty batch received. Ending import.")
+                    break
 
-                offset += current_batch_size
+                new_games_count = await self.process_batch(session, batch)
+                imported_so_far += len(batch)
 
-                # Rate limiting
-                time.sleep(0.25)
+                print(f"✅ Processed {len(batch)} games ({new_games_count} were new). Total: {imported_so_far}")
 
-        print(f"\nBulk import completed! Total new games: {total_inserted}")
+                if total and imported_so_far >= total:
+                    break
 
+                # Respect rate limits (4 requests per second for Free Tier)
+                await asyncio.sleep(0.25)
 
-def parse_arguments() -> argparse.Namespace:
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description="LeadrBoard Games Importer",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python app/import_games.py                          # Import 1000 games (default)
-  python app/import_games.py --total-games 5000       # Import 5000 games
-  python app/import_games.py --batch-size 50 --total-games 500  # Custom batch size
-        """,
-    )
-
-    parser.add_argument(
-        "--batch-size",
-        type=int,
-        help="Number of games to fetch per batch (default: 100)",
-        default=100,
-    )
-
-    parser.add_argument(
-        "--total-games",
-        type=int,
-        help="Total number of games to import (default: 1000)",
-        default=1000,
-    )
-
-    return parser.parse_args()
+        print("🏁 Import Complete!")
 
 
 async def main():
-    """Main function for importing games."""
-    args = parse_arguments()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--all", action="store_true", help="Pull every single game from IGDB")
+    parser.add_argument("--count", type=int, default=1000, help="Number of games to pull if not --all")
+    args = parser.parse_args()
+
     importer = GameImporter()
-    await importer.bulk_import(total_games=args.total_games, batch_size=args.batch_size)
+    target = None if args.all else args.count
+    try:
+        await importer.run_import(total=target)
+    finally:
+        # Clean up clients
+        await importer.client.aclose()
+        await importer.auth_client.aclose()
 
 
 if __name__ == "__main__":
