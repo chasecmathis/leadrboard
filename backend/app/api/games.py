@@ -5,6 +5,7 @@ from app.db.session import get_session
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 import app.common_types as types
+from app.services.recommendation import GameRecommendation
 
 router = APIRouter(prefix="/games", tags=["Games"])
 
@@ -53,3 +54,27 @@ async def get_games(
     result = await session.exec(statement)
     games = result.all()
     return games
+
+@router.get("/discover/personalized", response_model=list[Game])
+async def get_personalized_games(
+    limit: int = 10,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    if limit < 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid parameters")
+
+    recommender = GameRecommendation(session)
+    game_ids = await recommender.generate_recommendations(target_user_id=current_user.id, num_recommendations=limit)
+
+    if not game_ids:
+        fallback_statement = select(Game).limit(limit)
+        result = await session.exec(fallback_statement)
+        return result.all()
+
+    statement = select(Game).where(Game.id.in_(game_ids))
+    result = await session.exec(statement)
+    games = result.all()
+
+    return games
+
