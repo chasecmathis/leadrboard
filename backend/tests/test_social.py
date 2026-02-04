@@ -61,7 +61,7 @@ class TestSocialEndpoints:
     ):
         """Test that a follow request is successfully created in the database."""
         # Create a second user to follow
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
 
         # Send follow request
         response = await authenticated_client.post(f"/social/follow/{user2.id}")
@@ -91,7 +91,7 @@ class TestSocialEndpoints:
         test_session: AsyncSession,
     ):
         """Test that sending a duplicate follow request is handled properly."""
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
 
         # Send first follow request
         response1 = await authenticated_client.post(f"/social/follow/{user2.id}")
@@ -121,7 +121,7 @@ class TestSocialEndpoints:
         test_session: AsyncSession,
     ):
         """Test that sending a duplicate follow request is handled properly."""
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
 
         # Insert a pending follow request into the DB
         await follow_request_factory(user2.id, test_user.id)
@@ -161,7 +161,7 @@ class TestSocialEndpoints:
         test_session: AsyncSession,
     ):
         """Test that sending a duplicate follow request is handled properly."""
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
 
         # Insert a follow request into the DB
         await follow_request_factory(
@@ -195,7 +195,7 @@ class TestSocialEndpoints:
         test_session: AsyncSession,
     ):
         """Test that follow relationships are properly reflected on both users."""
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
 
         # Send follow request
         response = await authenticated_client.post(f"/social/follow/{user2.id}")
@@ -227,7 +227,7 @@ class TestSocialEndpoints:
         follow_status: types.FollowStatus,
     ):
         """Test rejecting a follow request."""
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
 
         # Insert a pending follow request into the DB
         await follow_request_factory(user2.id, test_user.id, follow_status)
@@ -254,7 +254,7 @@ class TestSocialEndpoints:
         test_session: AsyncSession,
     ):
         """Test rejecting a follow request."""
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
 
         # Reject follow request
         approve_response = await authenticated_client.post(

@@ -2,6 +2,7 @@ import pytest
 from httpx import AsyncClient
 from fastapi import status
 from app.models import User, CommentResponse, UpdateCommentRequest
+from app.common_types import FollowStatus
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 
@@ -17,16 +18,19 @@ class TestInteractionsEndpoints:
         user_factory,
         game_factory,
         review_factory,
+        follow_request_factory,
     ):
         """Test that liking a review works."""
         # Create a second user to post a review with
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
         # Create a test game
         game = await game_factory("Test Game", "A test game summary", 12345)
         # Create a test review
         review = await review_factory(
             game.id, user2.id, rating=9.6, review_text="Cool game", playtime=120
         )
+        # Add follower/following
+        await follow_request_factory(test_user.id, user2.id, FollowStatus.ACCEPTED)
 
         response = await authenticated_client.post(f"/reviews/{review.id}/like")
         assert response.status_code == status.HTTP_201_CREATED
@@ -43,14 +47,13 @@ class TestInteractionsEndpoints:
         self,
         authenticated_client: AsyncClient,
         test_session: AsyncSession,
-        test_user: User,
         user_factory,
         game_factory,
         review_factory,
     ):
         """Test liking a review that doesn't exist."""
         # Create a second user to post a review with
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
         # Create a test game
         game = await game_factory("Test Game", "A test game summary", 12345)
         # Create a test review
@@ -74,16 +77,19 @@ class TestInteractionsEndpoints:
         game_factory,
         review_factory,
         like_factory,
+        follow_request_factory,
     ):
         """Test that liking a review that has already been liked."""
         # Create a second user to post a review with
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
         # Create a test game
         game = await game_factory("Test Game", "A test game summary", 12345)
         # Create a test review
         review = await review_factory(
             game.id, user2.id, rating=9.6, review_text="Cool game", playtime=120
         )
+        # Add follower/following
+        await follow_request_factory(test_user.id, user2.id, FollowStatus.ACCEPTED)
         # Create a test like
         await like_factory(review.id, test_user.id)
 
@@ -103,16 +109,19 @@ class TestInteractionsEndpoints:
         game_factory,
         review_factory,
         like_factory,
+        follow_request_factory,
     ):
         """Test unliking a review."""
         # Create a second user to post a review with
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
         # Create a test game
         game = await game_factory("Test Game", "A test game summary", 12345)
         # Create a test review
         review = await review_factory(
             game.id, user2.id, rating=9.6, review_text="Cool game", playtime=120
         )
+        # Add follower/following
+        await follow_request_factory(test_user.id, user2.id, FollowStatus.ACCEPTED)
         # Create a test like
         await like_factory(review.id, test_user.id)
 
@@ -128,14 +137,13 @@ class TestInteractionsEndpoints:
         self,
         authenticated_client: AsyncClient,
         test_session: AsyncSession,
-        test_user: User,
         user_factory,
         game_factory,
         review_factory,
     ):
         """Test unliking a review that doesn't exist."""
         # Create a second user to post a review with
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
         # Create a test game
         game = await game_factory("Test Game", "A test game summary", 12345)
         # Create a test review
@@ -154,19 +162,23 @@ class TestInteractionsEndpoints:
         self,
         authenticated_client: AsyncClient,
         test_session: AsyncSession,
+        test_user: User,
         user_factory,
         game_factory,
         review_factory,
+        follow_request_factory,
     ):
         """Test unliking a review that isn't liked."""
         # Create a second user to post a review with
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
         # Create a test game
         game = await game_factory("Test Game", "A test game summary", 12345)
         # Create a test review
         review = await review_factory(
             game.id, user2.id, rating=9.6, review_text="Cool game", playtime=120
         )
+        # Add follower/following
+        await follow_request_factory(test_user.id, user2.id, FollowStatus.ACCEPTED)
 
         response = await authenticated_client.delete(f"/reviews/{review.id}/like")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -183,17 +195,21 @@ class TestInteractionsEndpoints:
         game_factory,
         review_factory,
         like_factory,
+        follow_request_factory,
     ):
         """Test getting likes."""
         # Create users
-        user2 = await user_factory("user2", "password123")
-        user3 = await user_factory("user3", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
+        user3 = await user_factory("user3", "password123", "grizz.bear@aol.com")
         # Create a test game
         game = await game_factory("Test Game", "A test game summary", 12345)
         # Create a test review
         review = await review_factory(
             game.id, user2.id, rating=9.6, review_text="Cool game", playtime=120
         )
+        # Add follower/following
+        await follow_request_factory(test_user.id, user2.id, FollowStatus.ACCEPTED)
+
         # Create test likes
         await like_factory(review.id, test_user.id)
         await like_factory(review.id, user3.id)
@@ -207,19 +223,24 @@ class TestInteractionsEndpoints:
         self,
         authenticated_client: AsyncClient,
         test_session: AsyncSession,
+        test_user: User,
         user_factory,
         game_factory,
         review_factory,
+        follow_request_factory,
     ):
         """Test creating a comment."""
         # Create a second user to post a review with
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
         # Create a test game
         game = await game_factory("Test Game", "A test game summary", 12345)
         # Create a test review
         review = await review_factory(
             game.id, user2.id, rating=9.6, review_text="Cool game", playtime=120
         )
+        # Add follower/following
+        await follow_request_factory(test_user.id, user2.id, FollowStatus.ACCEPTED)
+
         json_request = {
             "text": "Very cool game!",
             "parent_comment_id": None,
@@ -242,18 +263,22 @@ class TestInteractionsEndpoints:
         game_factory,
         review_factory,
         comment_factory,
+        follow_request_factory,
     ):
         """Test getting review comments."""
         # Create a second user to post a review with
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
         # Create a third user to post a comment with
-        user3 = await user_factory("user3", "password123")
+        user3 = await user_factory("user3", "password123", "grizz.bear@aol.com")
         # Create a test game
         game = await game_factory("Test Game", "A test game summary", 12345)
         # Create a test review
         review = await review_factory(
             game.id, user2.id, rating=9.6, review_text="Cool game", playtime=120
         )
+        # Add follower/following
+        await follow_request_factory(test_user.id, user2.id, FollowStatus.ACCEPTED)
+
         # Create dummy comments
         comment1 = await comment_factory(review.id, test_user.id, "Good review!", None)
         comment2 = await comment_factory(
@@ -282,16 +307,20 @@ class TestInteractionsEndpoints:
         game_factory,
         review_factory,
         comment_factory,
+        follow_request_factory,
     ):
         """Test updating a comment."""
         # Create a second user to post a review with
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
         # Create a test game
         game = await game_factory("Test Game", "A test game summary", 12345)
         # Create a test review
         review = await review_factory(
             game.id, user2.id, rating=9.6, review_text="Cool game", playtime=120
         )
+        # Add follower/following
+        await follow_request_factory(test_user.id, user2.id, FollowStatus.ACCEPTED)
+
         # Create dummy comments
         comment1 = await comment_factory(review.id, test_user.id, "Good review!", None)
 
@@ -314,20 +343,25 @@ class TestInteractionsEndpoints:
     async def test_update_comment_unauthorized(
         self,
         authenticated_client: AsyncClient,
+        test_user: User,
         user_factory,
         game_factory,
         review_factory,
         comment_factory,
+        follow_request_factory,
     ):
         """Test updating a comment with an unauthorized user."""
         # Create a second user to post a review with
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
         # Create a test game
         game = await game_factory("Test Game", "A test game summary", 12345)
         # Create a test review
         review = await review_factory(
             game.id, user2.id, rating=9.6, review_text="Cool game", playtime=120
         )
+        # Add follower/following
+        await follow_request_factory(test_user.id, user2.id, FollowStatus.ACCEPTED)
+
         # Create dummy comments
         comment1 = await comment_factory(
             review.id, user2.id, "This is my review!", None
@@ -351,16 +385,19 @@ class TestInteractionsEndpoints:
         game_factory,
         review_factory,
         comment_factory,
+        follow_request_factory,
     ):
         """Test deleting a comment."""
         # Create a second user to post a review with
-        user2 = await user_factory("user2", "password123")
+        user2 = await user_factory("user2", "password123", "cool.otter@aol.com")
         # Create a test game
         game = await game_factory("Test Game", "A test game summary", 12345)
         # Create a test review
         review = await review_factory(
             game.id, user2.id, rating=9.6, review_text="Cool game", playtime=120
         )
+        # Add follower/following
+        await follow_request_factory(test_user.id, user2.id, FollowStatus.ACCEPTED)
         # Create dummy comments
         comment1 = await comment_factory(review.id, test_user.id, "Good review!", None)
 

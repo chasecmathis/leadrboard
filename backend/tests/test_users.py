@@ -41,14 +41,24 @@ class TestUsersEndpoints:
         # Register first user
         response1 = await client.post(
             "/auth/register",
-            json={"username": "user1", "password": "password1"},
+            json={
+                "username": "user1",
+                "password": "password1",
+                "email": "cool.otter@aol.com",
+                "private": True,
+            },
         )
         assert response1.status_code == status.HTTP_200_OK
 
         # Register second user
         response2 = await client.post(
             "/auth/register",
-            json={"username": "user2", "password": "password2"},
+            json={
+                "username": "user2",
+                "password": "password2",
+                "email": "grizz.bear@aol.com",
+                "private": False,
+            },
         )
         assert response2.status_code == status.HTTP_200_OK
 

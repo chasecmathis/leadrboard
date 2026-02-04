@@ -30,7 +30,9 @@ class TestFeedEndpoints:
     ):
         """Test getting feed with reviews from followed users."""
         # Create another user and follow them
-        followed_user = await user_factory("followed_guy", "pass123")
+        followed_user = await user_factory(
+            "followed_guy", "pass123", "cool.otter@aol.com"
+        )
         await follow_request_factory(
             follower_user_id=test_user.id,
             followed_user_id=followed_user.id,
@@ -71,16 +73,22 @@ class TestFeedEndpoints:
         follow_request_factory,
     ):
         """Test that limit and skip parameters work for the feed."""
-        followed_user1 = await user_factory("followed_guy1", "pass123")
+        followed_user1 = await user_factory(
+            "followed_guy1", "pass123", "cool.otter@aol.com"
+        )
         await follow_request_factory(
             test_user.id, followed_user1.id, FollowStatus.ACCEPTED
         )
-        followed_user2 = await user_factory("followed_guy2", "pass123")
+        followed_user2 = await user_factory(
+            "followed_guy2", "pass123", "grizz.bear@aol.com"
+        )
         await follow_request_factory(
             test_user.id, followed_user2.id, FollowStatus.ACCEPTED
         )
 
-        followed_user3 = await user_factory("followed_guy3", "pass123")
+        followed_user3 = await user_factory(
+            "followed_guy3", "pass123", "happy.seal@aol.com"
+        )
         await follow_request_factory(
             test_user.id, followed_user3.id, FollowStatus.ACCEPTED
         )
@@ -110,7 +118,7 @@ class TestFeedEndpoints:
     ):
         """Test that reviews from users NOT followed do not appear in feed."""
         # Create a user we do NOT follow
-        stranger = await user_factory("stranger", "pass123")
+        stranger = await user_factory("stranger", "pass123", "cool.otter@aol.com")
         game = await game_factory("Secret Game", "Summary", 999)
         await review_factory(game.id, stranger.id, 1.0, "Don't look at this", 5)
 

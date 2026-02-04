@@ -1,6 +1,8 @@
 import pytest
 import pytest_asyncio
 from typing import AsyncGenerator, Optional
+
+from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -15,7 +17,7 @@ from app.common_types import FollowStatus
 
 class DummySettings:
     DATABASE_URL: str = "hereismydatabase"
-    SECRET_KEY: str = "secretkey123"
+    SECRET_KEY: str = "secretkey123" * 10
     ALGORITHM: str = "HS256"
     IGDB_CLIENT_ID: str = "igdb-client-id"
     IGDB_CLIENT_SECRET: str = "igdb-client-secret"
@@ -106,8 +108,10 @@ async def auth_token(client: AsyncClient, test_user: User) -> str:
     response = await client.post(
         "/auth/login",
         data={
-            "username": "test_user",
+            "username": test_user.username,
             "password": "password123",
+            "email": test_user.email,
+            "private": test_user.private,
         },
     )
     assert response.status_code == status.HTTP_200_OK
@@ -128,10 +132,17 @@ async def authenticated_client(client: AsyncClient, auth_token: str) -> AsyncCli
 def user_factory(test_session: AsyncSession):
     """Factory to create multiple test users."""
 
-    async def _create_user(username: str, password: str) -> User:
+    async def _create_user(
+        username: str,
+        password: str,
+        email: EmailStr = "joe.cool@aol.com",
+        private: bool = True,
+    ) -> User:
         user = User(
             username=username,
             hashed_password=hash_password(password),
+            email=email,
+            private=private,
         )
         test_session.add(user)
         await test_session.commit()

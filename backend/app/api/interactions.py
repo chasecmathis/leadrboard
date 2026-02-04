@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+
 from app.models import (
     User,
     Review,
@@ -16,6 +17,20 @@ from sqlmodel import select
 from datetime import datetime
 
 router = APIRouter(tags=["Interactions"])
+
+
+def _check_user_interaction_auth(current_user: User, target_user: User):
+    follower_ids = set(f.follower_id for f in target_user.followers)
+    # Check that the current user is following the review's user, the user is public, or it is the current user
+    if (
+        current_user.id != target_user.id
+        and current_user.id not in follower_ids
+        and target_user.private
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not allowed to interact with this review",
+        )
 
 
 # ============ LIKES ENDPOINTS ============
@@ -40,6 +55,16 @@ async def like_review(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Review not found",
         )
+
+    result = await session.exec(select(User).where(User.id == target_review.user_id))
+    target_user: User = result.first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Target user not found",
+        )
+
+    _check_user_interaction_auth(current_user, target_user)
 
     # Check if user already liked this review
     result = await session.exec(
@@ -86,6 +111,16 @@ async def unlike_review(
             detail="Review not found",
         )
 
+    result = await session.exec(select(User).where(User.id == target_review.user_id))
+    target_user: User = result.first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Target user not found",
+        )
+
+    _check_user_interaction_auth(current_user, target_user)
+
     # Check if like exists
     result = await session.exec(
         select(Like).where(
@@ -111,7 +146,7 @@ async def unlike_review(
 async def get_review_likes(
     review_id: int,
     session: AsyncSession = Depends(get_session),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     # Check that the review exists
     result = await session.exec(select(Review).where(Review.id == review_id))
@@ -121,6 +156,16 @@ async def get_review_likes(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Review not found",
         )
+
+    result = await session.exec(select(User).where(User.id == target_review.user_id))
+    target_user: User = result.first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Target user not found",
+        )
+
+    _check_user_interaction_auth(current_user, target_user)
 
     # Get all likes for the review
     likes = target_review.likes
@@ -158,6 +203,16 @@ async def create_comment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Review not found",
         )
+
+    result = await session.exec(select(User).where(User.id == target_review.user_id))
+    target_user: User = result.first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Target user not found",
+        )
+
+    _check_user_interaction_auth(current_user, target_user)
 
     # If parent_comment_id is provided, check that it exists and belongs to the same review
     if comment_request.parent_comment_id:
@@ -207,7 +262,7 @@ async def create_comment(
 async def get_review_comments(
     review_id: int,
     session: AsyncSession = Depends(get_session),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     # Check that the review exists
     result = await session.exec(select(Review).where(Review.id == review_id))
@@ -217,6 +272,16 @@ async def get_review_comments(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Review not found",
         )
+
+    result = await session.exec(select(User).where(User.id == target_review.user_id))
+    target_user: User = result.first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Target user not found",
+        )
+
+    _check_user_interaction_auth(current_user, target_user)
 
     comments = []
 
