@@ -1,4 +1,4 @@
-from pydantic import BaseModel, SecretStr, HttpUrl
+from pydantic import BaseModel, SecretStr, HttpUrl, EmailStr
 from sqlmodel import SQLModel, Field
 import app.common_types as types
 from datetime import datetime
@@ -39,13 +39,15 @@ def Relationship(
 
 
 class GameGenreLink(SQLModel, table=True):
-    game_id: int = Field(foreign_key="game.id", primary_key=True)
-    genre_id: int = Field(foreign_key="genre.id", primary_key=True)
+    game_id: int = Field(title="Game ID", foreign_key="game.id", primary_key=True)
+    genre_id: int = Field(title="Genre ID", foreign_key="genre.id", primary_key=True)
 
 
 class GamePlatformLink(SQLModel, table=True):
-    game_id: int = Field(foreign_key="game.id", primary_key=True)
-    platform_id: int = Field(foreign_key="platform.id", primary_key=True)
+    game_id: int = Field(title="Game ID", foreign_key="game.id", primary_key=True)
+    platform_id: int = Field(
+        title="Platform ID", foreign_key="platform.id", primary_key=True
+    )
 
 
 class Follow(SQLModel, table=True):
@@ -99,8 +101,17 @@ class User(SQLModel, table=True):
         unique=True,
         index=True,
     )
+    email: EmailStr = Field(
+        title="Email",
+        description="Email address for the given user",
+        unique=True,
+    )
     hashed_password: str = Field(
         title="Hashed Password", description="The hashed password of the user"
+    )
+    private: bool = Field(
+        title="Private",
+        description="Whether the user's account is private",
     )
     created_at: datetime = Field(
         title="Created At",
@@ -274,16 +285,30 @@ class Game(SQLModel, table=True):
 
 
 class Genre(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)  # IGDB ID
-    name: str = Field(index=True, unique=True)
+    id: Optional[int] = Field(
+        title="Genre ID from IGDB", default=None, primary_key=True
+    )  # IGDB ID
+    name: str = Field(
+        title="Genre Name",
+        description="Name of the genre from IGDB",
+        index=True,
+        unique=True,
+    )
     games: list["Game"] = Relationship(
         back_populates="genres", link_model=GameGenreLink
     )
 
 
 class Platform(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)  # IGDB ID
-    name: str = Field(index=True, unique=True)
+    id: Optional[int] = Field(
+        title="Platform ID from IGDB", default=None, primary_key=True
+    )  # IGDB ID
+    name: str = Field(
+        title="Platform Name",
+        description="Name of the platform from IGDB",
+        index=True,
+        unique=True,
+    )
     games: list["Game"] = Relationship(
         back_populates="platforms", link_model=GamePlatformLink
     )
@@ -296,6 +321,15 @@ class RegisterUserRequest(BaseModel):
     username: str = Field(title="Username", description="Username for the given user")
     password: SecretStr = Field(
         title="Password", description="The plain text password of the user"
+    )
+    email: EmailStr = Field(
+        title="Email",
+        description="Email address for the given user",
+        unique=True,
+    )
+    private: bool = Field(
+        title="Private",
+        description="Whether the user's account is private",
     )
 
 
@@ -335,23 +369,47 @@ class CreateReviewRequest(BaseModel):
 
 
 class ReviewResponse(BaseModel):
-    id: int = Field(title="Review ID")
-    game_id: int = Field(title="Game ID")
-    user_id: int = Field(title="User ID")
-    username: str = Field(title="Username")
-    rating: float = Field(title="Rating")
-    review_text: str = Field(title="Review Text")
-    playtime: Optional[int] = Field(title="Playtime", default=None)
-    created_at: datetime = Field(title="Created At")
-    like_count: int = Field(title="Like Count", default=0)
-    comment_count: int = Field(title="Comment Count", default=0)
-    user_has_liked: bool = Field(title="User Has Liked", default=False)
+    id: int = Field(title="Review ID", description="The unique ID of the review")
+    game_id: int = Field(title="Game ID", description="The ID of the review's game")
+    user_id: int = Field(title="User ID", description="The ID of the review's user")
+    username: str = Field(
+        title="Username", description="Username for the review's user"
+    )
+    rating: float = Field(
+        title="Rating", description="The review rating given for the game"
+    )
+    review_text: str = Field(
+        title="Review Text", description="The review text provided by the user"
+    )
+    playtime: Optional[int] = Field(
+        title="Playtime",
+        description="The amount of time the user has played the game",
+        default=None,
+    )
+    created_at: datetime = Field(
+        title="Created At", description="The date and time the review was created"
+    )
+    like_count: int = Field(
+        title="Like Count", description="The number of likes the review has", default=0
+    )
+    comment_count: int = Field(
+        title="Comment Count",
+        description="The number of comments the review has",
+        default=0,
+    )
+    user_has_liked: bool = Field(
+        title="User Has Liked",
+        description="If the user has liked the review",
+        default=False,
+    )
 
 
 class LikeResponse(BaseModel):
-    review_id: int = Field(title="Review ID")
-    user_id: int = Field(title="User ID")
-    created_at: datetime = Field(title="Created At")
+    review_id: int = Field(title="Review ID", description="The ID of the review")
+    user_id: int = Field(title="User ID", description="The user that liked the review")
+    created_at: datetime = Field(
+        title="Created At", description="The date and time the review was liked"
+    )
 
 
 class CreateCommentRequest(BaseModel):
@@ -378,27 +436,67 @@ class UpdateCommentRequest(BaseModel):
 
 
 class CommentResponse(BaseModel):
-    id: int = Field(title="Comment ID")
-    review_id: int = Field(title="Review ID")
-    user_id: int = Field(title="User ID")
-    username: str = Field(title="Username")
-    parent_comment_id: Optional[int] = Field(title="Parent Comment ID", default=None)
-    text: str = Field(title="Comment Text")
-    created_at: datetime = Field(title="Created At")
-    updated_at: Optional[datetime] = Field(title="Updated At", default=None)
+    id: int = Field(title="Comment ID", description="The ID of the comment")
+    review_id: int = Field(
+        title="Review ID", description="The ID of the review commented on"
+    )
+    user_id: int = Field(
+        title="User ID", description="The ID of the user that commented"
+    )
+    username: str = Field(
+        title="Username", description="Username for the commenting user"
+    )
+    parent_comment_id: Optional[int] = Field(
+        title="Parent Comment ID",
+        description="The ID of the parent comment (for nested replies)",
+        default=None,
+    )
+    text: str = Field(
+        title="Comment Text", description="The text content of the comment"
+    )
+    created_at: datetime = Field(
+        title="Created At", description="The date and time the comment was created"
+    )
+    updated_at: Optional[datetime] = Field(
+        title="Updated At",
+        description="The date and time the comment was updated",
+        default=None,
+    )
 
 
 class FeedItemResponse(BaseModel):
-    review_id: int = Field(title="Review ID")
-    game_id: int = Field(title="Game ID")
-    game_title: str = Field(title="Game Title")
-    game_cover_image: Optional[HttpUrl] = Field(title="Game Cover Image", default=None)
-    user_id: int = Field(title="User ID")
-    username: str = Field(title="Username")
-    rating: float = Field(title="Rating")
-    review_text: str = Field(title="Review Text")
-    playtime: Optional[int] = Field(title="Playtime", default=None)
-    created_at: datetime = Field(title="Created At")
-    like_count: int = Field(title="Like Count", default=0)
-    comment_count: int = Field(title="Comment Count", default=0)
-    user_has_liked: bool = Field(title="User Has Liked", default=False)
+    review_id: int = Field(title="Review ID", description="The ID of the review")
+    game_id: int = Field(title="Game ID", description="The ID of the game")
+    game_title: str = Field(title="Game Title", description="The title of the game")
+    game_cover_image: Optional[HttpUrl] = Field(
+        title="Game Cover Image",
+        description="The cover image of the game",
+        default=None,
+    )
+    user_id: int = Field(
+        title="User ID", description="The ID user that made the review"
+    )
+    username: str = Field(
+        title="Username", description="The username user that made the review"
+    )
+    rating: float = Field(title="Rating", description="The rating for the review")
+    review_text: str = Field(
+        title="Review Text", description="The text content of the review"
+    )
+    playtime: Optional[int] = Field(
+        title="Playtime",
+        default=None,
+        description="The amount of the time the game was played",
+    )
+    created_at: datetime = Field(
+        title="Created At", description="When the user created the review"
+    )
+    like_count: int = Field(
+        title="Like Count", description="The number of likes the review has"
+    )
+    comment_count: int = Field(
+        title="Comment Count", description="The number of comments the review has"
+    )
+    user_has_liked: bool = Field(
+        title="User Has Liked", description="If the user has liked the review"
+    )

@@ -158,7 +158,6 @@ class TestReviewsEndpoints:
     async def test_get_review(
         self,
         authenticated_client: AsyncClient,
-        test_session: AsyncSession,
         test_user: User,
         game_factory,
         review_factory,

@@ -40,11 +40,16 @@ async def send_follow_request(
             detail="You are already following this user",
         )
 
+    follow_status = (
+        types.FollowStatus.PENDING
+        if target_user.private
+        else types.FollowStatus.ACCEPTED
+    )
     # Follow the user
     follow = Follow(
         followed_id=target_user.id,
         follower_id=current_user.id,
-        status=types.FollowStatus.PENDING,
+        status=follow_status,
     )
     target_user.followers.append(follow)
     session.add(target_user)

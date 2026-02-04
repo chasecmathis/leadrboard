@@ -30,6 +30,8 @@ async def register(
     new_user = User(
         username=user.username,
         hashed_password=hash_password(user.password.get_secret_value()),
+        email=user.email,
+        private=user.private,
     )
     session.add(new_user)
     await session.commit()

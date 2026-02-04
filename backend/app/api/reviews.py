@@ -14,6 +14,21 @@ from sqlmodel import select
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
 
 
+def _check_user_interaction_auth(
+    current_user: User, target_user: User, target_review: Review
+):
+    # Check that the current user is following the review's user, the user is public, or it is the current user
+    if (
+        (current_user.id != target_review.user_id)
+        and current_user.id not in target_user.followers
+        and target_user.private
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not allowed to interact with this review",
+        )
+
+
 @router.post(
     "/",
     response_model=ReviewResponse,
@@ -86,6 +101,16 @@ async def get_review(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Review not found",
         )
+
+    result = await session.exec(select(User).where(User.id == review.user_id))
+    target_user: User = result.first()
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Target user not found",
+        )
+
+    _check_user_interaction_auth(current_user, target_user, review)
 
     # Get like count
     like_count = len(review.likes)

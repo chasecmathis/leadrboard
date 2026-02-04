@@ -264,7 +264,7 @@ class TestGamesEndpoints:
         )  # User B likes this, User A hasn't seen it
 
         # Setup "Neighbor" User (User B)
-        user_b = await user_factory("rpg_lover", "password123")
+        user_b = await user_factory("rpg_lover", "password123", "cool.otter@aol.com")
 
         # Both Current User (A) and User B like Skyrim (High Rating)
         # This makes them "Neighbors" in the vector space
